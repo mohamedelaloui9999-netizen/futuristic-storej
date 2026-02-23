@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ALIEN X EMPIRE 👿</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+
+<style>
+:root{
+--neon:#00f3ff;
+--plasma:#ff00ff;
+--dark:#04040a;
+}
+
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+background:var(--dark);
+font-family:'Orbitron',sans-serif;
+color:white;
+overflow-x:hidden;
+}
+
+/* نجوم */
+body::before{
+content:"";
+position:fixed;
+width:200%;
+height:200%;
+background:url("https://www.transparenttextures.com/patterns/stardust.png");
+animation:stars 150s linear infinite;
+opacity:.3;
+z-index:-1;
+}
+@keyframes stars{
+from{transform:translate(0,0)}
+to{transform:translate(-1000px,-1000px)}
+}
+
+/* هيدر */
+header{
+text-align:center;
+padding:100px 20px 60px;
+}
+header h1{
+font-size:clamp(2rem,6vw,4rem);
+color:var(--neon);
+text-shadow:0 0 20px var(--neon);
+}
+
+.store{
+padding:40px 10%;
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+gap:25px;
+}
+
+.card{
+border:1px solid var(--neon);
+padding:20px;
+border-radius:15px;
+text-align:center;
+transition:.4s;
+background:rgba(255,255,255,.03);
+}
+.card:hover{
+transform:scale(1.05);
+box-shadow:0 0 25px var(--neon);
+}
+.card img{
+width:100%;
+height:180px;
+object-fit:cover;
+border-radius:10px;
+}
+.price{
+color:var(--neon);
+font-size:1.5rem;
+margin:10px 0;
+}
+button{
+padding:10px;
+border:none;
+cursor:pointer;
+background:var(--plasma);
+color:black;
+font-weight:bold;
+}
+
+/* سلة */
+#cartPanel{
+position:fixed;
+left:-400px;
+top:0;
+width:350px;
+height:100%;
+background:black;
+padding:20px;
+transition:.5s;
+overflow-y:auto;
+}
+#cartPanel.active{left:0}
+
+/* لوحة Admin */
+#adminPanel{
+position:fixed;
+right:-500px;
+top:0;
+width:400px;
+height:100%;
+background:#111;
+padding:20px;
+transition:.5s;
+overflow-y:auto;
+}
+#adminPanel.active{right:0}
+
+input{
+width:100%;
+margin:8px 0;
+padding:8px;
+background:#222;
+border:1px solid #333;
+color:white;
+}
+</style>
+</head>
+<body>
+
+<header>
+<h1>👿 ALIEN X EMPIRE 👿</h1>
+<button onclick="toggleCart()">🛒 السلة</button>
+<button onclick="secretAdmin()">👽</button>
+</header>
+
+<section class="store" id="products"></section>
+
+<div id="cartPanel">
+<h2>🛒 سلة المشتريات</h2>
+<div id="cartItems"></div>
+<h3 id="total">الإجمالي: 0$</h3>
+<button onclick="checkout()">إتمام الشراء ⚡</button>
+</div>
+
+<div id="adminPanel">
+<h2>👿 لوحة الإمبراطور</h2>
+<input id="email" placeholder="Email">
+<input id="password" placeholder="Password" type="password">
+<button onclick="login()">تسجيل دخول</button>
+<hr>
+<h3>إضافة منتج</h3>
+<input id="pName" placeholder="اسم المنتج">
+<input id="pPrice" placeholder="السعر">
+<input id="pImg" placeholder="رابط الصورة">
+<button onclick="addProduct()">إضافة</button>
+<hr>
+<h3>إحصائيات</h3>
+<p id="stats"></p>
+</div>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-analytics.js";
+import { getFirestore, collection, addDoc, onSnapshot } 
+from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword } 
+from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAS7skn241U3yge8x30jrep9AY3KXxnWLA",
+  authDomain: "mohamed-future-store.firebaseapp.com",
+  projectId: "mohamed-future-store",
+  storageBucket: "mohamed-future-store.firebasestorage.app",
+  messagingSenderId: "14246138837",
+  appId: "1:14246138837:web:2c54f2c7ca15dc290ba35c",
+  measurementId: "G-0Z18EJF8B9"
+};
+
+const app = initializeApp(firebaseConfig);
+getAnalytics(app);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+function loadProducts(){
+  onSnapshot(collection(db,"products"), snapshot=>{
+    const container=document.getElementById("products");
+    container.innerHTML="";
+    snapshot.forEach(doc=>{
+      const p=doc.data();
+      container.innerHTML+=`
+      <div class="card">
+        <img src="${p.image || 'https://via.placeholder.com/300'}">
+        <h3>${p.name}</h3>
+        <div class="price">${p.price}$</div>
+        <button onclick="addToCart('${p.name}',${p.price})">شراء ⚡</button>
+      </div>`;
+    });
+  });
+}
+loadProducts();
+
+let cart=[];
+
+window.addToCart=function(name,price){
+  cart.push({name,price});
+  renderCart();
+}
+
+function renderCart(){
+  let total=0;
+  const container=document.getElementById("cartItems");
+  container.innerHTML="";
+  cart.forEach(item=>{
+    total+=item.price;
+    container.innerHTML+=`<p>${item.name} - ${item.price}$</p>`;
+  });
+  document.getElementById("total").innerText="الإجمالي: "+total+"$";
+}
+
+window.toggleCart=function(){
+  document.getElementById("cartPanel").classList.toggle("active");
+}
+
+window.checkout=async function(){
+  for(const item of cart){
+    await addDoc(collection(db,"orders"), item);
+  }
+  alert("⚡ تم إرسال الطلب");
+  cart=[];
+  renderCart();
+}
+
+window.secretAdmin=function(){
+  let pass=prompt("كلمة السر الإمبراطورية:");
+  if(pass==="alien999"){
+    document.getElementById("adminPanel").classList.toggle("active");
+  }
+}
+
+window.login=async function(){
+  const email=document.getElementById("email").value;
+  const pass=document.getElementById("password").value;
+  try{
+    await signInWithEmailAndPassword(auth,email,pass);
+    alert("تم الدخول 👿");
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+window.addProduct=async function(){
+  const name=document.getElementById("pName").value;
+  const price=Number(document.getElementById("pPrice").value);
+  const image=document.getElementById("pImg").value;
+  await addDoc(collection(db,"products"),{name,price,image});
+  alert("تمت الإضافة 👿");
+}
+
+onSnapshot(collection(db,"orders"), s=>{
+  document.getElementById("stats").innerText=
+  "عدد الطلبات: "+s.size;
+});
+
+</script>
+
+</body>
+</html>
